@@ -1,6 +1,6 @@
 import React from 'react'
-import { History, Trash2, X, FileText, Clock } from 'lucide-react'
-import { deleteHistoryItem, clearHistory, formatHistoryItem } from '../services/storage'
+import { History, Trash2, X, Clock } from 'lucide-react'
+import { deleteHistoryItem, clearHistory } from '../services/storage'
 
 function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
   const handleDelete = (e, id) => {
@@ -14,6 +14,12 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
       clearHistory()
       onLoadHistory()
     }
+  }
+
+  const handleLoadHistory = (item) => {
+    // 直接加载完整的历史分析结果，而不是只填充输入框
+    onLoadHistory(item)
+    onClose()
   }
 
   return (
@@ -115,14 +121,17 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
             </div>
           ) : (
             history.map(item => {
-              const formatted = formatHistoryItem(item)
+              const title = item.requirement_content?.substring(0, 50) + (item.requirement_content?.length > 50 ? '...' : '')
+              const displayTime = formatTime(item.timestamp)
+
+              // 从结果中提取摘要
+              const storyCount = item.result?.output?.user_stories?.length || 0
+              const reqCount = item.result?.analysis?.sub_requirements?.length || 0
+
               return (
                 <div
                   key={item.id}
-                  onClick={() => {
-                    onLoadHistory(item)
-                    onClose()
-                  }}
+                  onClick={() => handleLoadHistory(item)}
                   style={{
                     padding: '14px 20px',
                     cursor: 'pointer',
@@ -142,7 +151,7 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
                       whiteSpace: 'nowrap',
                       paddingRight: 8
                     }}>
-                      {formatted.title}
+                      {title}
                     </div>
                     <button
                       onClick={(e) => handleDelete(e, item.id)}
@@ -168,8 +177,17 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
                     color: '#999'
                   }}>
                     <Clock size={12} />
-                    {formatted.displayTime}
+                    {displayTime}
                   </div>
+                  {storyCount > 0 && (
+                    <div style={{
+                      marginTop: 4,
+                      fontSize: 12,
+                      color: '#52c41a'
+                    }}>
+                      {reqCount}个子需求 · {storyCount}个用户故事
+                    </div>
+                  )}
                 </div>
               )
             })
@@ -184,11 +202,30 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
           color: '#999',
           textAlign: 'center'
         }}>
-          点击记录可重新加载分析
+          点击记录重新加载完整分析结果
         </div>
       </div>
     </>
   )
+}
+
+function formatTime(timestamp) {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now - date
+
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
+
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 export default HistorySidebar

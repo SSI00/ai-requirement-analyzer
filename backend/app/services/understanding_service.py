@@ -75,24 +75,77 @@ class UnderstandingService:
             "implied_requirements": result.get("implied_requirements", []),
             "fuzzy_points": result.get("fuzzy_points", [])
         }
-        
+
         # 标准化实体结构
         for entity in standardized["entities"]:
             entity.setdefault("normalized", entity.get("name", ""))
             entity.setdefault("confidence", "中")
-        
+
         # 标准化隐含需求结构
         for req in standardized["implied_requirements"]:
             req.setdefault("status", "建议补充")
             req.setdefault("confidence", "中")
-        
+
         # 标准化模糊点结构
         for point in standardized["fuzzy_points"]:
             point.setdefault("options", ["选项A", "选项B", "其他"])
             point.setdefault("recommendation", "请根据实际业务场景选择")
             point.setdefault("impact", "影响待评估")
-        
+
         return standardized
+
+    def apply_clarification(self, understanding: Dict[str, Any], clarification: List[dict]) -> Dict[str, Any]:
+        """
+        应用澄清回答，更新理解结果
+
+        Args:
+            understanding: 原始理解结果
+            clarification: 澄清回答列表 [{"question": "...", "answer": "..."}]
+
+        Returns:
+            更新后的理解结果
+        """
+        # 创建副本避免修改原始数据
+        updated = {
+            **understanding,
+            "intent": {**understanding.get("intent", {})},
+            "entities": list(understanding.get("entities", [])),
+            "implied_requirements": list(understanding.get("implied_requirements", [])),
+            "fuzzy_points": []
+        }
+
+        # 用澄清回答更新模糊点
+        for point in understanding.get("fuzzy_points", []):
+            fuzzy_point_text = point.get("fuzzy_point", "")
+
+            # 找到对应的回答
+            answer_text = None
+            for ca in clarification:
+                if ca.get("question") == fuzzy_point_text or fuzzy_point_text in ca.get("question", ""):
+                    answer_text = ca.get("answer", "")
+                    break
+
+            # 如果有回答，更新模糊点状态
+            if answer_text:
+                updated_point = {**point}
+                updated_point["resolved"] = True
+                updated_point["user_answer"] = answer_text
+                updated["fuzzy_points"].append(updated_point)
+            else:
+                updated["fuzzy_points"].append(point)
+
+        # 添加澄清上下文到隐含需求
+        if clarification:
+            clarification_context = "；".join([
+                f"已澄清：{ca.get('question')} -> {ca.get('answer')}"
+                for ca in clarification
+            ])
+            # 在意图描述中追加澄清信息
+            if updated["intent"].get("description"):
+                updated["intent"]["description"] += f"\n[澄清] {clarification_context}"
+
+        logger.info(f"应用澄清回答完成，处理 {len(clarification)} 个问题")
+        return updated
 
 
 # 全局服务实例

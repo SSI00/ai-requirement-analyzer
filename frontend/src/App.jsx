@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Sparkles, Clock, CheckCircle, ChevronDown, ChevronUp, FileText, Layers, History } from 'lucide-react'
+import { Sparkles, Clock, ChevronDown, ChevronUp, FileText, Layers, History, Download } from 'lucide-react'
 import InputForm from './components/InputForm'
 import AnalysisProgress from './components/AnalysisProgress'
 import UnderstandingResult from './components/UnderstandingResult'
 import AnalysisResult from './components/AnalysisResult'
 import OutputResult from './components/OutputResult'
 import HistorySidebar from './components/HistorySidebar'
-import { analyzeRequirementStream, healthCheck } from './services/api'
+import ClarificationModal from './components/ClarificationModal'
+import { analyzeRequirementStream, healthCheck, continueAnalysis } from './services/api'
 import { saveAnalysisRecord, getHistory } from './services/storage'
+import { exportToMarkdown, exportToDocx, exportToTxt, exportToPdf } from './services/exportService'
 
 function App() {
   const [result, setResult] = useState(null)
@@ -32,6 +34,13 @@ function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyList, setHistoryList] = useState([])
   const [loadedHistory, setLoadedHistory] = useState(null) // 从历史加载的记录
+  // P4: 澄清相关状态
+  const [clarificationNeeded, setClarificationNeeded] = useState(false)
+  const [fuzzyPoints, setFuzzyPoints] = useState([])
+  const [requirementId, setRequirementId] = useState(null)
+  const [submittingClarification, setSubmittingClarification] = useState(false)
+  // P5: 导出菜单状态
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
 
   const cancelRef = useRef(null)
 
@@ -59,17 +68,40 @@ function App() {
     }
   }
 
-  // P1: 加载历史记录
+  // P1: 加载历史记录 - 直接恢复完整分析结果
   const handleLoadHistory = useCallback((item) => {
-    if (item) {
-      setLoadedHistory(item)
+    if (item && item.result) {
+      // 直接设置完整结果，显示历史分析
+      setResult(item.result)
+      setProgressSteps(item.result.steps)
+      setPartialResults({
+        understanding: item.result.understanding,
+        analysis: item.result.analysis,
+        output: item.result.output
+      })
+      setLoadedHistory(null)
+      setViewMode('result')
+      // 展开所有面板
+      setCollapsedPanels({
+        understanding: false,
+        analysis: false,
+        output: false
+      })
     } else {
+      setResult(null)
       setLoadedHistory(null)
     }
   }, [])
 
-  // P1: 清除加载的历史记录
+  // P1: 清除历史记录加载状态
   const handleClearLoadedHistory = useCallback(() => {
+    setResult(null)
+    setProgressSteps(null)
+    setPartialResults({
+      understanding: null,
+      analysis: null,
+      output: null
+    })
     setLoadedHistory(null)
   }, [])
 
@@ -88,10 +120,18 @@ function App() {
       analysis: null,
       output: null
     })
+    setClarificationNeeded(false)
 
     const cancel = analyzeRequirementStream(content, projectContext, {
       onProgress: (data) => {
         setProgressSteps(data.steps)
+      },
+      onClarificationNeeded: (data) => {
+        // 需要澄清，暂停分析
+        setClarificationNeeded(true)
+        setFuzzyPoints(data.fuzzy_points || [])
+        setRequirementId(data.requirement_id)
+        setLoading(false)
       },
       onUnderstanding: (data) => {
         setPartialResults(prev => ({ ...prev, understanding: data.data }))
@@ -111,6 +151,7 @@ function App() {
           output: data.output
         })
         setLoading(false)
+        setClarificationNeeded(false)
         // P0: 分析完成后默认显示结果视图
         setViewMode('result')
         // P1: 保存到本地存储
@@ -124,6 +165,7 @@ function App() {
       onError: (err, data) => {
         console.error('分析失败:', err)
         setLoading(false)
+        setClarificationNeeded(false)
 
         // 如果有部分结果，保留显示
         if (data?.steps) {
@@ -178,6 +220,127 @@ function App() {
 
     cancelRef.current = cancel
   }, [])
+
+  // P4: 处理澄清提交
+  const handleClarificationSubmit = useCallback(async (clarificationData) => {
+    if (!requirementId) return
+
+    setSubmittingClarification(true)
+
+    try {
+      const continueResult = await continueAnalysis(requirementId, clarificationData.answers, false)
+
+      setResult(continueResult)
+      setProgressSteps(continueResult.steps)
+      setPartialResults({
+        understanding: continueResult.understanding,
+        analysis: continueResult.analysis,
+        output: continueResult.output
+      })
+      setClarificationNeeded(false)
+      setViewMode('result')
+
+      // 保存到历史记录
+      const lastContent = loadedHistory?.requirement_content ||
+        (window.lastAnalysisContent || '')
+      const lastContext = loadedHistory?.project_context ||
+        (window.lastAnalysisContext || '')
+
+      if (lastContent) {
+        saveAnalysisRecord({
+          requirement_content: lastContent,
+          project_context: lastContext,
+          result: continueResult
+        })
+        setHistoryList(getHistory())
+      }
+    } catch (err) {
+      console.error('继续分析失败:', err)
+      setError({
+        title: '继续分析失败',
+        message: err.message || '无法完成澄清后的分析',
+        suggestion: '请重试或跳过澄清'
+      })
+    } finally {
+      setSubmittingClarification(false)
+    }
+  }, [requirementId, loadedHistory])
+
+  // P4: 处理跳过澄清
+  const handleClarificationSkip = useCallback(async () => {
+    if (!requirementId) return
+
+    setSubmittingClarification(true)
+
+    try {
+      const continueResult = await continueAnalysis(requirementId, [], true)
+
+      setResult(continueResult)
+      setProgressSteps(continueResult.steps)
+      setPartialResults({
+        understanding: continueResult.understanding,
+        analysis: continueResult.analysis,
+        output: continueResult.output
+      })
+      setClarificationNeeded(false)
+      setViewMode('result')
+
+      // 保存到历史记录
+      const lastContent = loadedHistory?.requirement_content ||
+        (window.lastAnalysisContent || '')
+      const lastContext = loadedHistory?.project_context ||
+        (window.lastAnalysisContext || '')
+
+      if (lastContent) {
+        saveAnalysisRecord({
+          requirement_content: lastContent,
+          project_context: lastContext,
+          result: continueResult
+        })
+        setHistoryList(getHistory())
+      }
+    } catch (err) {
+      console.error('跳过澄清后继续分析失败:', err)
+      setError({
+        title: '继续分析失败',
+        message: err.message || '无法跳过澄清后继续分析',
+        suggestion: '请重试'
+      })
+    } finally {
+      setSubmittingClarification(false)
+    }
+  }, [requirementId, loadedHistory])
+
+  // P5: 导出功能
+  const handleExport = useCallback(async (format) => {
+    if (!result) return
+
+    setExportMenuOpen(false)
+
+    try {
+      switch (format) {
+        case 'md':
+          await exportToMarkdown(result)
+          break
+        case 'docx':
+          await exportToDocx(result)
+          break
+        case 'txt':
+          await exportToTxt(result)
+          break
+        case 'pdf':
+          await exportToPdf(result)
+          break
+      }
+    } catch (err) {
+      console.error('导出失败:', err)
+      setError({
+        title: '导出失败',
+        message: err.message || '无法导出文件',
+        suggestion: '请重试或选择其他格式'
+      })
+    }
+  }, [result])
 
   // 判断是否显示某个结果面板
   const showUnderstanding = partialResults.understanding || (result?.understanding)
@@ -252,22 +415,6 @@ function App() {
                 </span>
               )}
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircle size={14} color="#52c41a" />
-              文本输入
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircle size={14} color="#52c41a" />
-              需求理解
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircle size={14} color="#52c41a" />
-              矛盾检测
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircle size={14} color="#52c41a" />
-              PRD生成
-            </div>
           </div>
         </div>
       </header>
@@ -285,8 +432,8 @@ function App() {
 
         {/* Loading State with Progress */}
         {loading && (
-          <AnalysisProgress 
-            steps={progressSteps} 
+          <AnalysisProgress
+            steps={progressSteps}
             error={null}
           />
         )}
@@ -294,8 +441,8 @@ function App() {
         {/* Error Message */}
         {error && !loading && (
           <div className="card" style={{ borderLeft: '4px solid #ff4d4f' }}>
-            <div style={{ 
-              color: '#cf1322', 
+            <div style={{
+              color: '#cf1322',
               fontSize: 15,
               fontWeight: 600,
               marginBottom: 8
@@ -303,9 +450,9 @@ function App() {
               {error.title}
             </div>
             {error.message && (
-              <div style={{ 
+              <div style={{
                 color: '#595959',
-                fontSize: 14, 
+                fontSize: 14,
                 lineHeight: 1.8,
                 marginBottom: error.suggestion ? 12 : 0
               }}>
@@ -313,7 +460,7 @@ function App() {
               </div>
             )}
             {error.suggestion && (
-              <div style={{ 
+              <div style={{
                 padding: '10px 14px',
                 background: '#f6ffed',
                 borderRadius: 8,
@@ -354,6 +501,65 @@ function App() {
               )}
               <span>·</span>
               <span>状态: <strong style={{ color: result ? '#52c41a' : '#1677ff' }}>{result ? '分析完成' : '分析中...'}</strong></span>
+              {/* P5: 导出按钮 */}
+              {result && (
+                <div style={{ position: 'relative', marginLeft: 'auto' }}>
+                  <button
+                    onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #d9d9d9',
+                      background: 'white',
+                      cursor: 'pointer',
+                      fontSize: 13
+                    }}
+                  >
+                    <Download size={14} />
+                    导出
+                  </button>
+                  {exportMenuOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: 4,
+                      background: 'white',
+                      border: '1px solid #e8e8e8',
+                      borderRadius: 8,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 100,
+                      minWidth: 120
+                    }}>
+                      {[
+                        { format: 'md', label: 'Markdown (.md)' },
+                        { format: 'docx', label: 'Word 文档 (.docx)' },
+                        { format: 'txt', label: '文本文件 (.txt)' },
+                        { format: 'pdf', label: 'PDF 文档 (.pdf)' }
+                      ].map(item => (
+                        <div
+                          key={item.format}
+                          onClick={() => handleExport(item.format)}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            borderBottom: '1px solid #f0f0f0',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          {item.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* P0: View Mode Toggle - 分析完成后显示 */}
@@ -537,6 +743,24 @@ function App() {
           history={historyList}
           onLoadHistory={handleLoadHistory}
         />
+
+        {/* P4: 澄清问题模态框 */}
+        {clarificationNeeded && (
+          <ClarificationModal
+            fuzzyPoints={fuzzyPoints}
+            onSubmit={handleClarificationSubmit}
+            onSkip={handleClarificationSkip}
+            isLoading={submittingClarification}
+          />
+        )}
+
+        {/* 点击空白处关闭导出菜单 */}
+        {exportMenuOpen && (
+          <div
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }}
+            onClick={() => setExportMenuOpen(false)}
+          />
+        )}
       </div>
     </div>
   )

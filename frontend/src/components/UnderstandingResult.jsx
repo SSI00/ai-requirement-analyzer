@@ -1,5 +1,5 @@
 import React from 'react'
-import { Brain, Target, Puzzle, HelpCircle } from 'lucide-react'
+import { Target, Puzzle, HelpCircle } from 'lucide-react'
 
 function UnderstandingResult({ data }) {
   if (!data) return null
@@ -17,10 +17,7 @@ function UnderstandingResult({ data }) {
 
   return (
     <div className="card">
-      <div className="card-title">
-        <Brain size={20} />
-        需求理解结果
-      </div>
+      {/* 移除外层重复标题，保留内部section结构 */}
 
       {/* 意图识别 */}
       <div className="section">

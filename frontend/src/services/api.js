@@ -161,6 +161,22 @@ export function analyzeRequirementStream(content, projectContext = '', callbacks
 }
 
 /**
+ * 继续分析（澄清后）
+ * @param {string} requirementId - 需求ID
+ * @param {string} clarification - 用户澄清回答
+ * @param {boolean} skipped - 是否跳过澄清
+ * @returns {Promise<Object>} 继续分析的结果
+ */
+export async function continueAnalysis(requirementId, clarification, skipped = false) {
+  const response = await api.post('/api/v1/requirements/continue', {
+    requirement_id: requirementId,
+    clarification,
+    skipped
+  })
+  return response.data
+}
+
+/**
  * 健康检查
  * @returns {Promise<Object>} 健康状态
  */

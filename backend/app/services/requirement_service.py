@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 class RequirementService:
     """需求分析主服务"""
-    
+
+    # 存储进行中的分析上下文（用于澄清后继续）
+    _active_contexts: Dict[str, Dict[str, Any]] = {}
+
     def __init__(self):
         self.steps_template = [
             {"step": "intent_recognition", "name": "意图识别", "status": "pending"},
@@ -28,7 +31,7 @@ class RequirementService:
             {"step": "conflict_detection", "name": "矛盾检测", "status": "pending"},
             {"step": "output_generation", "name": "输出生成", "status": "pending"},
         ]
-    
+
     def _update_step(self, steps: List[dict], step_id: str, status: str, message: str = None):
         """更新步骤状态"""
         for s in steps:
@@ -37,11 +40,24 @@ class RequirementService:
                 if message:
                     s["message"] = message
                 break
-    
+
     def _make_progress_event(self, event_type: str, data: dict) -> str:
         """构造SSE事件字符串"""
         return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-    
+
+    def _has_critical_fuzzy_points(self, understanding: Dict[str, Any]) -> bool:
+        """检查是否有需要澄清的模糊点"""
+        fuzzy_points = understanding.get("fuzzy_points", [])
+        if not fuzzy_points:
+            return False
+        # 有模糊点且有高影响级别的需要澄清
+        for point in fuzzy_points:
+            impact = point.get("impact", "")
+            if "高" in impact or "必须" in impact or "重要" in impact:
+                return True
+        # 超过3个模糊点也需要澄清
+        return len(fuzzy_points) >= 3
+
     async def process_requirement_stream(
         self,
         content: str,
@@ -50,129 +66,153 @@ class RequirementService:
     ) -> AsyncGenerator[str, None]:
         """
         流式处理需求分析流程，实时推送进度更新
-        
+
         事件类型:
         - progress: 步骤进度更新
         - understanding: 需求理解结果（Layer 2完成）
         - analysis: 需求分析结果（Layer 3完成）
         - output: 输出生成结果（Layer 4完成）
+        - clarification_needed: 需要澄清（暂停，等待用户回答）
         - complete: 全部完成，包含完整结果汇总
         - error: 处理出错
         """
         requirement_id = str(uuid.uuid4())[:8]
         start_time = time.time()
         steps = [s.copy() for s in self.steps_template]
-        
+
         logger.info(f"[{requirement_id}] 开始流式处理需求分析请求")
-        
+
         # 发送初始进度
         yield self._make_progress_event("progress", {
             "requirement_id": requirement_id,
             "steps": steps,
             "phase": "started"
         })
-        
+
         understanding = None
         analysis = None
         output = None
-        
+
         try:
             # Step 1: 需求理解 (Layer 2)
             self._update_step(steps, "intent_recognition", "running", "正在分析用户核心意图...")
             self._update_step(steps, "entity_extraction", "running", "正在提取关键业务实体...")
             self._update_step(steps, "implied_mining", "running", "正在推导隐含需求...")
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "understanding"
             })
-            
+
             logger.info(f"[{requirement_id}] Step 1/3: 需求理解")
             understanding = await understanding_service.analyze(
                 user_input=content,
                 project_context=project_context,
                 conversation_history=conversation_history
             )
-            
-            self._update_step(steps, "intent_recognition", "completed", 
+
+            self._update_step(steps, "intent_recognition", "completed",
                 f"识别到意图: {understanding.get('intent', {}).get('type', '未知')}")
             self._update_step(steps, "entity_extraction", "completed",
                 f"提取到 {len(understanding.get('entities', []))} 个实体")
             self._update_step(steps, "implied_mining", "completed",
                 f"发现 {len(understanding.get('implied_requirements', []))} 个隐含需求")
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "understanding_done"
             })
-            
+
             # 发送需求理解结果
             yield self._make_progress_event("understanding", {
                 "requirement_id": requirement_id,
                 "data": understanding
             })
-            
-            # Step 2: 需求分析 (Layer 3)
+
+            # 检查是否需要澄清
+            if self._has_critical_fuzzy_points(understanding):
+                logger.info(f"[{requirement_id}] 检测到需要澄清的模糊点，暂停等待用户回答")
+                self._update_step(steps, "implied_mining", "pending", "等待澄清...")
+
+                # 保存上下文供后续继续
+                self._active_contexts[requirement_id] = {
+                    "content": content,
+                    "project_context": project_context,
+                    "conversation_history": conversation_history,
+                    "understanding": understanding,
+                    "steps": steps,
+                    "start_time": start_time
+                }
+
+                # 发送澄清请求事件
+                yield self._make_progress_event("clarification_needed", {
+                    "requirement_id": requirement_id,
+                    "fuzzy_points": understanding.get("fuzzy_points", []),
+                    "message": "检测到需求描述不清晰，需要澄清以下问题"
+                })
+                return  # 暂停，等待前端调用 continue 接口
+
+            # 继续 Step 2: 需求分析 (Layer 3)
             self._update_step(steps, "requirement_decomposition", "running", "正在拆解为可执行单元...")
             self._update_step(steps, "conflict_detection", "running", "正在识别需求间冲突...")
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "analysis"
             })
-            
+
             logger.info(f"[{requirement_id}] Step 2/3: 需求分析")
             analysis = await analysis_service.analyze(understanding)
-            
+
             self._update_step(steps, "requirement_decomposition", "completed",
                 f"拆解为 {len(analysis.get('sub_requirements', []))} 个子需求")
             self._update_step(steps, "conflict_detection", "completed",
                 f"检测到 {len(analysis.get('conflicts', []))} 个矛盾")
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "analysis_done"
             })
-            
+
             # 发送需求分析结果
             yield self._make_progress_event("analysis", {
                 "requirement_id": requirement_id,
                 "data": analysis
             })
-            
+
             # Step 3: 输出生成 (Layer 4)
             self._update_step(steps, "output_generation", "running", "正在生成用户故事与验收标准...")
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "output"
             })
-            
+
             logger.info(f"[{requirement_id}] Step 3/3: 输出生成")
             output = await output_service.generate(understanding, analysis)
-            
+
             self._update_step(steps, "output_generation", "completed",
                 f"生成 {len(output.get('user_stories', []))} 个用户故事")
-            
+
             processing_time = int((time.time() - start_time) * 1000)
-            
+
             yield self._make_progress_event("progress", {
                 "requirement_id": requirement_id,
                 "steps": steps,
                 "phase": "output_done"
             })
-            
+
             # 发送输出生成结果
             yield self._make_progress_event("output", {
                 "requirement_id": requirement_id,
                 "data": output
             })
-            
+
             # 发送完成事件
             yield self._make_progress_event("complete", {
                 "requirement_id": requirement_id,
@@ -184,9 +224,9 @@ class RequirementService:
                 "processing_time_ms": processing_time,
                 "error_info": None
             })
-            
+
             logger.info(f"[{requirement_id}] 需求分析完成，耗时: {processing_time}ms")
-            
+
         except LLMServiceError as e:
             logger.error(f"[{requirement_id}] LLM服务错误: {str(e)}")
             error_info = {
@@ -199,7 +239,7 @@ class RequirementService:
                 "error_info": error_info,
                 "steps": steps
             })
-            
+
         except Exception as e:
             logger.error(f"[{requirement_id}] 需求分析失败: {str(e)}")
             error_info = {
@@ -212,6 +252,101 @@ class RequirementService:
                 "error_info": error_info,
                 "steps": steps
             })
+
+    async def continue_after_clarification(
+        self,
+        requirement_id: str,
+        clarification: List[dict],
+        skipped: bool = False
+    ) -> Dict[str, Any]:
+        """
+        澄清后继续分析
+
+        从保存的上下文恢复，继续完成剩余的分析步骤
+        """
+        # 获取保存的上下文
+        ctx = self._active_contexts.get(requirement_id)
+        if not ctx:
+            raise RequirementServiceError(
+                f"找不到需求ID {requirement_id} 的分析上下文",
+                {"type": "context_not_found"}
+            )
+
+        content = ctx["content"]
+        project_context = ctx["project_context"]
+        conversation_history = ctx["conversation_history"]
+        understanding = ctx["understanding"]
+        steps = ctx["steps"]
+        start_time = ctx["start_time"]
+
+        # 如果用户提供了澄清回答，更新 understanding
+        if not skipped and clarification:
+            understanding = understanding_service.apply_clarification(
+                understanding, clarification
+            )
+
+        # 清理上下文
+        del self._active_contexts[requirement_id]
+
+        analysis = None
+        output = None
+
+        try:
+            # Step 2: 需求分析 (Layer 3)
+            self._update_step(steps, "requirement_decomposition", "running", "正在拆解为可执行单元...")
+            self._update_step(steps, "conflict_detection", "running", "正在识别需求间冲突...")
+
+            logger.info(f"[{requirement_id}] Step 2/3: 需求分析（继续）")
+            analysis = await analysis_service.analyze(understanding)
+
+            self._update_step(steps, "requirement_decomposition", "completed",
+                f"拆解为 {len(analysis.get('sub_requirements', []))} 个子需求")
+            self._update_step(steps, "conflict_detection", "completed",
+                f"检测到 {len(analysis.get('conflicts', []))} 个矛盾")
+
+            # Step 3: 输出生成 (Layer 4)
+            self._update_step(steps, "output_generation", "running", "正在生成用户故事与验收标准...")
+
+            logger.info(f"[{requirement_id}] Step 3/3: 输出生成（继续）")
+            output = await output_service.generate(understanding, analysis)
+
+            self._update_step(steps, "output_generation", "completed",
+                f"生成 {len(output.get('user_stories', []))} 个用户故事")
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            result = {
+                "requirement_id": requirement_id,
+                "status": "success",
+                "steps": steps,
+                "understanding": understanding,
+                "analysis": analysis,
+                "output": output,
+                "processing_time_ms": processing_time,
+                "error_info": None,
+                "resumed_from_clarification": True
+            }
+
+            logger.info(f"[{requirement_id}] 澄清后继续分析完成，耗时: {processing_time}ms")
+            return result
+
+        except LLMServiceError as e:
+            logger.error(f"[{requirement_id}] LLM服务错误（继续分析）: {str(e)}")
+            error_info = {
+                "type": "llm_error",
+                "message": str(e),
+                "suggestion": "请检查: 1) API Key是否正确 2) 网络连接是否正常 3) API余额是否充足"
+            }
+            raise RequirementServiceError(error_info["message"], error_info)
+
+        except Exception as e:
+            logger.error(f"[{requirement_id}] 继续分析失败: {str(e)}")
+            error_info = {
+                "type": "unknown_error",
+                "message": str(e),
+                "suggestion": "系统内部错误，请查看后端日志获取详细信息"
+            }
+            raise RequirementServiceError(error_info["message"], error_info)
     
     async def process_requirement(
         self,

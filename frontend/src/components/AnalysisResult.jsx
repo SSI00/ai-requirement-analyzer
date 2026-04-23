@@ -27,10 +27,7 @@ function AnalysisResult({ data }) {
 
   return (
     <div className="card">
-      <div className="card-title">
-        <GitBranch size={20} />
-        需求分析结果
-      </div>
+      {/* 移除外层重复标题 */}
 
       {/* 子需求列表 */}
       {sub_requirements && sub_requirements.length > 0 && (

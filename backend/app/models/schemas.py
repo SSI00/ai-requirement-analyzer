@@ -202,3 +202,16 @@ class HealthResponse(BaseModel):
     llm_provider: str = Field(default="")
     llm_model: str = Field(default="")
     timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class ClarificationAnswer(BaseModel):
+    """澄清问题回答"""
+    question: str = Field(description="澄清问题")
+    answer: str = Field(description="用户回答")
+
+
+class ClarificationContinueRequest(BaseModel):
+    """澄清后继续分析请求"""
+    requirement_id: str = Field(description="需求ID")
+    clarification: List[ClarificationAnswer] = Field(description="澄清回答列表")
+    skipped: bool = Field(default=False, description="是否跳过澄清")

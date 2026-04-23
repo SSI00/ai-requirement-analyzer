@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from app.models.schemas import (
     RequirementAnalyzeRequest,
     RequirementResponse,
-    HealthResponse
+    HealthResponse,
+    ClarificationContinueRequest
 )
 from app.services.requirement_service import requirement_service, RequirementServiceError
 from app.core.config import settings
@@ -112,3 +113,42 @@ async def health_check():
         llm_provider=settings.llm_provider,
         llm_model=settings.OPENAI_MODEL
     )
+
+
+@router.post("/continue", status_code=status.HTTP_200_OK)
+async def continue_after_clarification(request: ClarificationContinueRequest):
+    """
+    澄清问题后的继续分析接口
+
+    用户回答澄清问题后，继续完成需求分析流程
+    """
+    try:
+        result = await requirement_service.continue_after_clarification(
+            requirement_id=request.requirement_id,
+            clarification=request.clarification,
+            skipped=request.skipped
+        )
+        return result
+
+    except RequirementServiceError as e:
+        logger.error(f"继续分析服务错误: {str(e)}")
+        error_detail = {
+            "type": e.error_info.get("type", "unknown") if e.error_info else "unknown",
+            "message": str(e),
+            "suggestion": e.error_info.get("suggestion", "") if e.error_info else ""
+        }
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=error_detail
+        )
+
+    except Exception as e:
+        logger.error(f"继续分析API错误: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "type": "internal_error",
+                "message": f"继续分析处理失败: {str(e)}",
+                "suggestion": "请检查后端服务日志获取详细信息"
+            }
+        )

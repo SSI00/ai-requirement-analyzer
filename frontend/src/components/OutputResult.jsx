@@ -36,10 +36,7 @@ function OutputResult({ data }) {
 
   return (
     <div className="card">
-      <div className="card-title">
-        <BookOpen size={20} />
-        结构化输出
-      </div>
+      {/* 移除外层重复标题 */}
 
       {/* 用户故事 */}
       {user_stories && user_stories.length > 0 && (

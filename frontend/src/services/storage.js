@@ -41,12 +41,29 @@ function generateId() {
 }
 
 export function formatHistoryItem(item) {
+  const content = item.requirement_content || ''
+  const title = content.substring(0, 50) + (content.length > 50 ? '...' : '')
+
+  // 尝试从结果中提取摘要信息
+  let summary = ''
+  if (item.result?.output?.user_stories?.length > 0) {
+    const storyCount = item.result.output.user_stories.length
+    summary = `${storyCount}个用户故事`
+  } else if (item.result?.analysis?.sub_requirements?.length > 0) {
+    const reqCount = item.result.analysis.sub_requirements.length
+    summary = `${reqCount}个子需求`
+  } else if (item.result?.understanding?.intent?.type) {
+    summary = `意图: ${item.result.understanding.intent.type}`
+  }
+
   return {
     id: item.id,
     timestamp: item.timestamp,
     displayTime: formatTime(item.timestamp),
-    title: item.requirement_content?.substring(0, 50) + (item.requirement_content?.length > 50 ? '...' : ''),
-    content: item.requirement_content
+    title: title,
+    content: content,
+    summary: summary,
+    result: item.result
   }
 }
 
