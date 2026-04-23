@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Sparkles, Clock, CheckCircle } from 'lucide-react'
+import { Sparkles, Clock, CheckCircle, ChevronDown, ChevronUp, FileText, Layers, History } from 'lucide-react'
 import InputForm from './components/InputForm'
 import AnalysisProgress from './components/AnalysisProgress'
 import UnderstandingResult from './components/UnderstandingResult'
 import AnalysisResult from './components/AnalysisResult'
 import OutputResult from './components/OutputResult'
+import HistorySidebar from './components/HistorySidebar'
 import { analyzeRequirementStream, healthCheck } from './services/api'
+import { saveAnalysisRecord, getHistory } from './services/storage'
 
 function App() {
   const [result, setResult] = useState(null)
@@ -18,12 +20,25 @@ function App() {
     analysis: null,
     output: null
   })
+  // P0: 视图切换状态
+  const [viewMode, setViewMode] = useState('result') // 'process' | 'result'
+  // P0: 面板折叠状态
+  const [collapsedPanels, setCollapsedPanels] = useState({
+    understanding: false,
+    analysis: false,
+    output: false
+  })
+  // P1: 历史记录状态
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyList, setHistoryList] = useState([])
+  const [loadedHistory, setLoadedHistory] = useState(null) // 从历史加载的记录
 
   const cancelRef = useRef(null)
 
-  // 页面加载时检查后端状态
+  // 页面加载时检查后端状态 & 加载历史记录
   useEffect(() => {
     checkBackend()
+    setHistoryList(getHistory())
   }, [])
 
   // 组件卸载时取消正在进行的请求
@@ -43,6 +58,20 @@ function App() {
       setBackendStatus({ ok: false })
     }
   }
+
+  // P1: 加载历史记录
+  const handleLoadHistory = useCallback((item) => {
+    if (item) {
+      setLoadedHistory(item)
+    } else {
+      setLoadedHistory(null)
+    }
+  }, [])
+
+  // P1: 清除加载的历史记录
+  const handleClearLoadedHistory = useCallback(() => {
+    setLoadedHistory(null)
+  }, [])
 
   const handleAnalyze = useCallback((content, projectContext) => {
     // 取消之前的请求
@@ -82,6 +111,15 @@ function App() {
           output: data.output
         })
         setLoading(false)
+        // P0: 分析完成后默认显示结果视图
+        setViewMode('result')
+        // P1: 保存到本地存储
+        saveAnalysisRecord({
+          requirement_content: content,
+          project_context: projectContext,
+          result: data
+        })
+        setHistoryList(getHistory())
       },
       onError: (err, data) => {
         console.error('分析失败:', err)
@@ -160,10 +198,10 @@ function App() {
           </div>
           <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#666', alignItems: 'center' }}>
             {/* 后端状态指示器 */}
-            <div 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: 6,
                 padding: '4px 10px',
                 borderRadius: 12,
@@ -184,6 +222,36 @@ function App() {
               }} />
               {backendStatus === null ? '检测中...' : backendStatus?.ok ? '后端正常' : '后端未连接'}
             </div>
+            {/* P1: 历史记录按钮 */}
+            <button
+              onClick={() => setHistoryOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 12px',
+                borderRadius: 12,
+                background: '#e6f4ff',
+                border: 'none',
+                color: '#1677ff',
+                fontSize: 12,
+                cursor: 'pointer'
+              }}
+            >
+              <History size={14} />
+              历史记录
+              {historyList.length > 0 && (
+                <span style={{
+                  background: '#1677ff',
+                  color: 'white',
+                  borderRadius: 10,
+                  padding: '0 6px',
+                  fontSize: 11
+                }}>
+                  {historyList.length}
+                </span>
+              )}
+            </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <CheckCircle size={14} color="#52c41a" />
               文本输入
@@ -207,7 +275,13 @@ function App() {
       {/* Main Content */}
       <div className="container">
         {/* Input Form */}
-        <InputForm onSubmit={handleAnalyze} loading={loading} />
+        <InputForm
+          onSubmit={handleAnalyze}
+          loading={loading}
+          initialContent={loadedHistory?.requirement_content || ''}
+          initialContext={loadedHistory?.project_context || ''}
+          onClear={handleClearLoadedHistory}
+        />
 
         {/* Loading State with Progress */}
         {loading && (
@@ -282,24 +356,163 @@ function App() {
               <span>状态: <strong style={{ color: result ? '#52c41a' : '#1677ff' }}>{result ? '分析完成' : '分析中...'}</strong></span>
             </div>
 
-            {/* Completed Steps Summary (only show when done) */}
-            {result?.steps && result.steps.length > 0 && !loading && (
-              <AnalysisProgress steps={result.steps} />
+            {/* P0: View Mode Toggle - 分析完成后显示 */}
+            {result && (
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                marginBottom: 16
+              }}>
+                <button
+                  onClick={() => setViewMode('process')}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: 6,
+                    border: viewMode === 'process' ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                    background: viewMode === 'process' ? '#e6f4ff' : 'white',
+                    color: viewMode === 'process' ? '#1677ff' : '#666',
+                    fontWeight: viewMode === 'process' ? 600 : 400,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Layers size={16} />
+                  过程
+                </button>
+                <button
+                  onClick={() => setViewMode('result')}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: 6,
+                    border: viewMode === 'result' ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                    background: viewMode === 'result' ? '#e6f4ff' : 'white',
+                    color: viewMode === 'result' ? '#1677ff' : '#666',
+                    fontWeight: viewMode === 'result' ? 600 : 400,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <FileText size={16} />
+                  结果
+                </button>
+              </div>
             )}
 
-            {/* Layer 2: Understanding */}
-            {showUnderstanding && (
-              <UnderstandingResult data={partialResults.understanding || result?.understanding} />
-            )}
+            {/* P0: View Mode Content */}
+            {viewMode === 'process' ? (
+              /* 过程视图：只显示进度 */
+              result?.steps && result.steps.length > 0 && (
+                <AnalysisProgress steps={result.steps} />
+              )
+            ) : (
+              /* 结果视图：显示三个面板，可折叠 */
+              <>
+                {/* Layer 2: Understanding */}
+                {showUnderstanding && (
+                  <div style={{
+                    marginBottom: 16,
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 8,
+                    overflow: 'hidden'
+                  }}>
+                    <div
+                      onClick={() => setCollapsedPanels(p => ({ ...p, understanding: !p.understanding }))}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: '#fafafa',
+                        cursor: 'pointer',
+                        userSelect: 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
+                        <ChevronDown size={18} style={{ transform: collapsedPanels.understanding ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+                        需求理解结果
+                      </div>
+                      <div style={{ fontSize: 12, color: '#888' }}>
+                        {collapsedPanels.understanding ? '点击展开' : '点击折叠'}
+                      </div>
+                    </div>
+                    {!collapsedPanels.understanding && (
+                      <UnderstandingResult data={partialResults.understanding || result?.understanding} />
+                    )}
+                  </div>
+                )}
 
-            {/* Layer 3: Analysis */}
-            {showAnalysis && (
-              <AnalysisResult data={partialResults.analysis || result?.analysis} />
-            )}
+                {/* Layer 3: Analysis */}
+                {showAnalysis && (
+                  <div style={{
+                    marginBottom: 16,
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 8,
+                    overflow: 'hidden'
+                  }}>
+                    <div
+                      onClick={() => setCollapsedPanels(p => ({ ...p, analysis: !p.analysis }))}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: '#fafafa',
+                        cursor: 'pointer',
+                        userSelect: 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
+                        <ChevronDown size={18} style={{ transform: collapsedPanels.analysis ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+                        需求分析结果
+                      </div>
+                      <div style={{ fontSize: 12, color: '#888' }}>
+                        {collapsedPanels.analysis ? '点击展开' : '点击折叠'}
+                      </div>
+                    </div>
+                    {!collapsedPanels.analysis && (
+                      <AnalysisResult data={partialResults.analysis || result?.analysis} />
+                    )}
+                  </div>
+                )}
 
-            {/* Layer 4: Output */}
-            {showOutput && (
-              <OutputResult data={partialResults.output || result?.output} />
+                {/* Layer 4: Output */}
+                {showOutput && (
+                  <div style={{
+                    marginBottom: 16,
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 8,
+                    overflow: 'hidden'
+                  }}>
+                    <div
+                      onClick={() => setCollapsedPanels(p => ({ ...p, output: !p.output }))}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: '#fafafa',
+                        cursor: 'pointer',
+                        userSelect: 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
+                        <ChevronDown size={18} style={{ transform: collapsedPanels.output ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+                        结构化输出
+                      </div>
+                      <div style={{ fontSize: 12, color: '#888' }}>
+                        {collapsedPanels.output ? '点击展开' : '点击折叠'}
+                      </div>
+                    </div>
+                    {!collapsedPanels.output && (
+                      <OutputResult data={partialResults.output || result?.output} />
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -316,6 +529,14 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* P1: 历史记录侧边栏 */}
+        <HistorySidebar
+          isOpen={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          history={historyList}
+          onLoadHistory={handleLoadHistory}
+        />
       </div>
     </div>
   )

@@ -1,15 +1,31 @@
-import React, { useState } from 'react'
-import { Send, FileText, AlertCircle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Send, FileText, AlertCircle, RefreshCw } from 'lucide-react'
 
-function InputForm({ onSubmit, loading }) {
-  const [content, setContent] = useState('')
-  const [projectContext, setProjectContext] = useState('')
+function InputForm({ onSubmit, loading, initialContent, initialContext, onClear }) {
+  const [content, setContent] = useState(initialContent || '')
+  const [projectContext, setProjectContext] = useState(initialContext || '')
   const [showContext, setShowContext] = useState(false)
+
+  // 当从历史加载时，更新内容
+  useEffect(() => {
+    if (initialContent !== undefined) {
+      setContent(initialContent)
+    }
+    if (initialContext !== undefined) {
+      setProjectContext(initialContext)
+    }
+  }, [initialContent, initialContext])
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!content.trim()) return
     onSubmit(content, projectContext)
+  }
+
+  const handleClear = () => {
+    setContent('')
+    setProjectContext('')
+    onClear?.()
   }
 
   return (
@@ -20,6 +36,43 @@ function InputForm({ onSubmit, loading }) {
       </div>
       
       <form onSubmit={handleSubmit}>
+        {/* 加载历史记录时的提示 */}
+        {initialContent && (
+          <div style={{
+            padding: '8px 12px',
+            background: '#fff7e6',
+            border: '1px solid #ffd591',
+            borderRadius: 6,
+            marginBottom: 12,
+            fontSize: 13,
+            color: '#ad6800',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>
+              <strong>来自历史记录</strong> — 可直接修改后重新分析
+            </span>
+            <button
+              type="button"
+              onClick={handleClear}
+              style={{
+                border: 'none',
+                background: 'none',
+                color: '#ad6800',
+                cursor: 'pointer',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <RefreshCw size={14} />
+              清除
+            </button>
+          </div>
+        )}
+
         <div style={{ marginBottom: 16 }}>
           <textarea
             className="textarea"
