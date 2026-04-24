@@ -352,6 +352,13 @@ class RequirementService:
         output = None
 
         try:
+            self._update_step(
+                steps,
+                "implied_mining",
+                "completed",
+                "澄清已确认，隐含需求分析完成"
+            )
+
             # Step 2: 需求分析 (Layer 3)
             self._update_step(steps, "requirement_decomposition", "running", "正在拆解为可执行单元...")
             self._update_step(steps, "conflict_detection", "running", "正在识别需求间冲突...")

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     # 应用信息
     APP_NAME: str = "AI Requirement Analyzer"
-    APP_VERSION: str = "1.1.1"
+    APP_VERSION: str = "1.1.2"
     DEBUG: bool = True
     
     # AI模型配置 (兼容OpenAI格式，支持MiniMax等服务商)

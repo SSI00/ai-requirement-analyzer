@@ -198,7 +198,7 @@ class RequirementResponse(BaseModel):
 class HealthResponse(BaseModel):
     """健康检查响应"""
     status: str = Field(default="ok")
-    version: str = Field(default="1.1.1")
+    version: str = Field(default="1.1.2")
     llm_provider: str = Field(default="")
     llm_model: str = Field(default="")
     timestamp: datetime = Field(default_factory=datetime.now)

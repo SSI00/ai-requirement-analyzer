@@ -26,7 +26,7 @@ function UnderstandingResult({ data }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span className="tag tag-blue">{intent?.type || '未知'}</span>
             <span className={`tag ${getConfidenceColor(intent?.confidence)}`}>
-              置信度: {intent?.confidence || '中'}
+              置信度 {intent?.confidence || '中'}
             </span>
           </div>
           <div className="list-item-desc">{intent?.description}</div>
@@ -51,12 +51,11 @@ function UnderstandingResult({ data }) {
                 style={{
                   background: '#f5f5f5',
                   borderRadius: 8,
-                  padding: '8px 12px',
-                  fontSize: 13
+                  padding: '8px 12px'
                 }}
               >
-                <div style={{ fontWeight: 500 }}>{entity.name}</div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                <div className="typography-body" style={{ fontWeight: 500 }}>{entity.name}</div>
+                <div className="typography-caption" style={{ color: '#888', marginTop: 2 }}>
                   {entity.type} · 置信度 {entity.confidence}
                 </div>
               </div>
@@ -77,9 +76,9 @@ function UnderstandingResult({ data }) {
               <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                 <span className="tag tag-orange">{req.status}</span>
                 <span className={`tag ${getConfidenceColor(req.confidence)}`}>
-                  置信度: {req.confidence}
+                  置信度 {req.confidence}
                 </span>
-                <span style={{ fontSize: 12, color: '#888' }}>来源: {req.source}</span>
+                <span className="typography-caption" style={{ color: '#888' }}>来源: {req.source}</span>
               </div>
             </div>
           ))}
@@ -105,34 +104,36 @@ function UnderstandingResult({ data }) {
                 </div>
 
                 {point.user_answer && (
-                  <div style={{
-                    marginTop: 10,
-                    padding: '10px 12px',
-                    background: '#f6ffed',
-                    borderRadius: 8,
-                    border: '1px solid #b7eb8f',
-                    fontSize: 13,
-                    color: '#237804'
-                  }}>
+                  <div
+                    className="typography-body-sm"
+                    style={{
+                      marginTop: 10,
+                      padding: '10px 12px',
+                      background: '#f6ffed',
+                      borderRadius: 8,
+                      border: '1px solid #b7eb8f',
+                      color: '#237804'
+                    }}
+                  >
                     当前答案: {point.user_answer}
                   </div>
                 )}
 
                 {point.options?.length > 0 && (
                   <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>参考选项</div>
+                    <div className="typography-caption" style={{ color: '#888', marginBottom: 6 }}>参考选项</div>
                     {point.options.map((opt, j) => {
                       const isSelected = point.user_answer === opt
 
                       return (
                         <div
                           key={j}
+                          className="typography-body-sm"
                           style={{
                             padding: '6px 10px',
                             background: isSelected ? '#e6f4ff' : 'white',
                             borderRadius: 6,
                             marginBottom: 6,
-                            fontSize: 13,
                             border: isSelected ? '1px solid #91caff' : '1px solid #d9d9d9'
                           }}
                         >
@@ -144,7 +145,7 @@ function UnderstandingResult({ data }) {
                 )}
 
                 {point.recommendation && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#1677ff' }}>
+                  <div className="typography-caption" style={{ marginTop: 8, color: '#1677ff' }}>
                     建议: {point.recommendation}
                   </div>
                 )}

@@ -113,10 +113,10 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, onClose, isLoading,
               <HelpCircle size={20} color="#fa8c16" />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 16, color: '#333' }}>
+              <div className="typography-heading-md" style={{ fontWeight: 600, color: '#333' }}>
                 需要澄清的问题
               </div>
-              <div style={{ fontSize: 13, color: '#999' }}>
+              <div className="typography-body-sm" style={{ color: '#999' }}>
                 可以直接选推荐项，也可以手动输入更准确的答案
               </div>
             </div>

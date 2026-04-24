@@ -14,7 +14,7 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
   }
 
   const handleClear = () => {
-    if (window.confirm('确定清空所有历史记录？')) {
+    if (window.confirm('确定清空所有历史记录吗？')) {
       clearHistory()
       if (onRefreshHistory) {
         onRefreshHistory()
@@ -25,14 +25,12 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
   }
 
   const handleLoadHistory = (item) => {
-    // 直接加载完整的历史分析结果，而不是只填充输入框
     onLoadHistory(item)
     onClose()
   }
 
   return (
     <>
-      {/* Backdrop */}
       {isOpen && (
         <div
           onClick={onClose}
@@ -48,38 +46,42 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
         />
       )}
 
-      {/* Sidebar */}
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        right: isOpen ? 0 : '-380px',
-        width: 380,
-        height: '100vh',
-        background: 'white',
-        boxShadow: '-4px 0 20px rgba(0,0,0,0.15)',
-        zIndex: 1000,
-        transition: 'right 0.3s ease',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {/* Header */}
-        <div style={{
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: isOpen ? 0 : '-380px',
+          width: 380,
+          height: '100vh',
+          background: 'white',
+          boxShadow: '-4px 0 20px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          transition: 'right 0.3s ease',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 20px',
-          borderBottom: '1px solid #e8e8e8'
-        }}>
+          flexDirection: 'column'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid #e8e8e8'
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <History size={20} color="#1677ff" />
-            <span style={{ fontWeight: 600, fontSize: 16 }}>历史记录</span>
-            <span style={{
-              background: '#e6f4ff',
-              color: '#1677ff',
-              padding: '2px 8px',
-              borderRadius: 10,
-              fontSize: 12
-            }}>
+            <span className="typography-heading-md" style={{ fontWeight: 600 }}>历史记录</span>
+            <span
+              className="typography-caption"
+              style={{
+                background: '#e6f4ff',
+                color: '#1677ff',
+                padding: '2px 8px',
+                borderRadius: 10
+              }}
+            >
               {history.length} 条
             </span>
           </div>
@@ -87,12 +89,12 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
             {history.length > 0 && (
               <button
                 onClick={handleClear}
+                className="typography-body-sm"
                 style={{
                   border: 'none',
                   background: 'none',
                   color: '#ff4d4f',
                   cursor: 'pointer',
-                  fontSize: 13,
                   padding: '4px 8px',
                   borderRadius: 4
                 }}
@@ -115,24 +117,23 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
           </div>
         </div>
 
-        {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 0' }}>
           {history.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
-              color: '#999'
-            }}>
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '60px 20px',
+                color: '#999'
+              }}
+            >
               <Clock size={48} color="#d9d9d9" style={{ marginBottom: 16 }} />
-              <div style={{ fontSize: 14 }}>暂无历史记录</div>
-              <div style={{ fontSize: 12, marginTop: 8 }}>分析完成后会自动保存到这里</div>
+              <div className="typography-body">暂无历史记录</div>
+              <div className="typography-caption" style={{ marginTop: 8 }}>分析完成后会自动保存到这里</div>
             </div>
           ) : (
             history.map(item => {
               const title = item.requirement_content?.substring(0, 50) + (item.requirement_content?.length > 50 ? '...' : '')
               const displayTime = formatTime(item.timestamp)
-
-              // 从结果中提取摘要
               const storyCount = item.result?.output?.user_stories?.length || 0
               const reqCount = item.result?.analysis?.sub_requirements?.length || 0
 
@@ -150,15 +151,17 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{
-                      fontSize: 13,
-                      color: '#333',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      paddingRight: 8
-                    }}>
+                    <div
+                      className="typography-body-sm"
+                      style={{
+                        color: '#333',
+                        flex: 1,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        paddingRight: 8
+                      }}
+                    >
                       {title}
                     </div>
                     <button
@@ -176,24 +179,22 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 6,
-                    fontSize: 12,
-                    color: '#999'
-                  }}>
+                  <div
+                    className="typography-caption"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginTop: 6,
+                      color: '#999'
+                    }}
+                  >
                     <Clock size={12} />
                     {displayTime}
                   </div>
                   {storyCount > 0 && (
-                    <div style={{
-                      marginTop: 4,
-                      fontSize: 12,
-                      color: '#52c41a'
-                    }}>
-                      {reqCount}个子需求 · {storyCount}个用户故事
+                    <div className="typography-caption" style={{ marginTop: 4, color: '#52c41a' }}>
+                      {reqCount} 个子需求 · {storyCount} 个用户故事
                     </div>
                   )}
                 </div>
@@ -202,15 +203,16 @@ function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHist
           )}
         </div>
 
-        {/* Footer hint */}
-        <div style={{
-          padding: '12px 20px',
-          borderTop: '1px solid #e8e8e8',
-          fontSize: 12,
-          color: '#999',
-          textAlign: 'center'
-        }}>
-          点击记录重新加载完整分析结果
+        <div
+          className="typography-caption"
+          style={{
+            padding: '12px 20px',
+            borderTop: '1px solid #e8e8e8',
+            color: '#999',
+            textAlign: 'center'
+          }}
+        >
+          点击记录可重新加载完整分析结果
         </div>
       </div>
     </>
