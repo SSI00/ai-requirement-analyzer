@@ -11,6 +11,68 @@ import { analyzeRequirementStream, healthCheck, continueAnalysis } from './servi
 import { saveAnalysisRecord, getHistory } from './services/storage'
 import { exportToMarkdown, exportToDocx, exportToTxt, exportToPdf } from './services/exportService'
 
+function applyClarificationAnswers(understanding, answers = []) {
+  if (!understanding) return understanding
+
+  const answerMap = new Map(
+    answers
+      .filter(item => item?.question && item?.answer?.trim())
+      .map(item => [item.question, item.answer.trim()])
+  )
+
+  return {
+    ...understanding,
+    fuzzy_points: (understanding.fuzzy_points || []).map(point => {
+      const answer = answerMap.get(point.fuzzy_point)
+
+      if (!answer) {
+        return point
+      }
+
+      return {
+        ...point,
+        resolved: true,
+        user_answer: answer
+      }
+    })
+  }
+}
+
+function buildClarificationResumeSteps(steps, skipped = false) {
+  if (!Array.isArray(steps)) return steps
+
+  return steps.map(step => {
+    switch (step.step) {
+      case 'implied_mining':
+        return {
+          ...step,
+          status: 'completed',
+          message: skipped ? '已跳过澄清，继续分析...' : '澄清已确认，继续分析...'
+        }
+      case 'requirement_decomposition':
+        return {
+          ...step,
+          status: 'running',
+          message: '正在基于澄清结果拆解需求...'
+        }
+      case 'conflict_detection':
+        return {
+          ...step,
+          status: 'running',
+          message: '正在识别需求间冲突...'
+        }
+      case 'output_generation':
+        return {
+          ...step,
+          status: 'pending',
+          message: '等待生成结构化输出...'
+        }
+      default:
+        return step
+    }
+  })
+}
+
 function App() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -59,16 +121,6 @@ function App() {
     }
   }, [])
 
-  // 监听澄清弹窗关闭事件
-  useEffect(() => {
-    const handleCloseModal = () => {
-      setClarificationNeeded(false)
-      setError(null) // 清除错误状态
-    }
-    window.addEventListener('closeClarificationModal', handleCloseModal)
-    return () => window.removeEventListener('closeClarificationModal', handleCloseModal)
-  }, [])
-
   const checkBackend = async () => {
     try {
       const data = await healthCheck()
@@ -77,6 +129,11 @@ function App() {
       setBackendStatus({ ok: false })
     }
   }
+
+  const handleClarificationClose = useCallback(() => {
+    setClarificationNeeded(false)
+    setError(null)
+  }, [])
 
   // P1: 加载历史记录 - 直接恢复完整分析结果
   const handleLoadHistory = useCallback((item) => {
@@ -239,10 +296,30 @@ function App() {
   const handleClarificationSubmit = useCallback(async (clarificationData) => {
     if (!requirementId) return
 
+    const answers = (clarificationData.answers || []).filter(item => item?.answer?.trim())
+    const optimisticUnderstanding = applyClarificationAnswers(partialResults.understanding, answers)
+    const lastContent = loadedHistory?.requirement_content ||
+      (window.lastAnalysisContent || '')
+    const lastContext = loadedHistory?.project_context ||
+      (window.lastAnalysisContext || '')
+
     setSubmittingClarification(true)
+    setLoading(true)
+    setError(null)
+    setClarificationNeeded(false)
+    setViewMode('result')
+
+    if (optimisticUnderstanding) {
+      setPartialResults(prev => ({
+        ...prev,
+        understanding: optimisticUnderstanding
+      }))
+    }
+
+    setProgressSteps(prev => buildClarificationResumeSteps(prev, false))
 
     try {
-      const continueResult = await continueAnalysis(requirementId, clarificationData.answers, false)
+      const continueResult = await continueAnalysis(requirementId, answers, false)
 
       setResult(continueResult)
       setProgressSteps(continueResult.steps)
@@ -251,15 +328,9 @@ function App() {
         analysis: continueResult.analysis,
         output: continueResult.output
       })
-      setClarificationNeeded(false)
-      setViewMode('result')
+      setLoading(false)
 
       // 保存到历史记录
-      const lastContent = loadedHistory?.requirement_content ||
-        (window.lastAnalysisContent || '')
-      const lastContext = loadedHistory?.project_context ||
-        (window.lastAnalysisContext || '')
-
       if (lastContent) {
         saveAnalysisRecord({
           requirement_content: lastContent,
@@ -293,18 +364,22 @@ function App() {
         message: errorMsg,
         suggestion
       })
-      // 关闭弹窗，错误会显示在主页面
-      setClarificationNeeded(false)
+      setLoading(false)
     } finally {
       setSubmittingClarification(false)
     }
-  }, [requirementId, loadedHistory])
+  }, [loadedHistory, partialResults.understanding, requirementId])
 
   // P4: 处理跳过澄清
   const handleClarificationSkip = useCallback(async () => {
     if (!requirementId) return
 
     setSubmittingClarification(true)
+    setLoading(true)
+    setError(null)
+    setClarificationNeeded(false)
+    setViewMode('result')
+    setProgressSteps(prev => buildClarificationResumeSteps(prev, true))
 
     try {
       const continueResult = await continueAnalysis(requirementId, [], true)
@@ -316,8 +391,7 @@ function App() {
         analysis: continueResult.analysis,
         output: continueResult.output
       })
-      setClarificationNeeded(false)
-      setViewMode('result')
+      setLoading(false)
 
       // 保存到历史记录
       const lastContent = loadedHistory?.requirement_content ||
@@ -359,7 +433,7 @@ function App() {
         message: errorMsg,
         suggestion
       })
-      setClarificationNeeded(false)
+      setLoading(false)
     } finally {
       setSubmittingClarification(false)
     }
@@ -805,6 +879,7 @@ function App() {
             fuzzyPoints={fuzzyPoints}
             onSubmit={handleClarificationSubmit}
             onSkip={handleClarificationSkip}
+            onClose={handleClarificationClose}
             isLoading={submittingClarification}
             error={error}
           />

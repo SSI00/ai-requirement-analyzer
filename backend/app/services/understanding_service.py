@@ -3,7 +3,7 @@
 功能: 实现Layer 2 - 意图识别、实体抽取、隐含需求挖掘、模糊点检测
 状态: ✅ 已实现
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.services.llm_service import llm_service, LLMServiceError
 from app.prompts.understanding import (
     UNDERSTANDING_SYSTEM_PROMPT,

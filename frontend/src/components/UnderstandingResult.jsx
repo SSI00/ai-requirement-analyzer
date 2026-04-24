@@ -17,9 +17,6 @@ function UnderstandingResult({ data }) {
 
   return (
     <div className="card">
-      {/* 移除外层重复标题，保留内部section结构 */}
-
-      {/* 意图识别 */}
       <div className="section">
         <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Target size={16} />
@@ -35,13 +32,12 @@ function UnderstandingResult({ data }) {
           <div className="list-item-desc">{intent?.description}</div>
           {intent?.deep_intent && (
             <div className="list-item-desc" style={{ marginTop: 4, color: '#1677ff' }}>
-              💡 深层意图: {intent.deep_intent}
+              深层意图: {intent.deep_intent}
             </div>
           )}
         </div>
       </div>
 
-      {/* 实体抽取 */}
       {entities && entities.length > 0 && (
         <div className="section">
           <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -50,15 +46,18 @@ function UnderstandingResult({ data }) {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {entities.map((entity, i) => (
-              <div key={i} style={{
-                background: '#f5f5f5',
-                borderRadius: 8,
-                padding: '8px 12px',
-                fontSize: 13
-              }}>
+              <div
+                key={i}
+                style={{
+                  background: '#f5f5f5',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  fontSize: 13
+                }}
+              >
                 <div style={{ fontWeight: 500 }}>{entity.name}</div>
                 <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                  {entity.type} · 置信度{entity.confidence}
+                  {entity.type} · 置信度 {entity.confidence}
                 </div>
               </div>
             ))}
@@ -66,7 +65,6 @@ function UnderstandingResult({ data }) {
         </div>
       )}
 
-      {/* 隐含需求 */}
       {implied_requirements && implied_requirements.length > 0 && (
         <div className="section">
           <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -88,37 +86,71 @@ function UnderstandingResult({ data }) {
         </div>
       )}
 
-      {/* 模糊点与澄清问题 */}
       {fuzzy_points && fuzzy_points.length > 0 && (
         <div className="section">
           <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <HelpCircle size={16} />
             需要澄清的问题 ({fuzzy_points.length}个)
           </div>
-          {fuzzy_points.map((point, i) => (
-            <div key={i} className="list-item question-item">
-              <div className="list-item-title">{point.fuzzy_point}</div>
-              <div style={{ marginTop: 8 }}>
-                {point.options?.map((opt, j) => (
-                  <div key={j} style={{
-                    padding: '6px 10px',
-                    background: 'white',
-                    borderRadius: 6,
-                    marginBottom: 6,
-                    fontSize: 13,
-                    border: '1px solid #d9d9d9'
-                  }}>
-                    {opt}
-                  </div>
-                ))}
-              </div>
-              {point.recommendation && (
-                <div style={{ marginTop: 8, fontSize: 12, color: '#1677ff' }}>
-                  💡 建议: {point.recommendation}
+          {fuzzy_points.map((point, i) => {
+            const isResolved = Boolean(point.resolved && point.user_answer)
+
+            return (
+              <div key={i} className="list-item question-item">
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                  <div className="list-item-title">{point.fuzzy_point}</div>
+                  <span className={`tag ${isResolved ? 'tag-green' : 'tag-orange'}`}>
+                    {isResolved ? '已确认' : '待确认'}
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {point.user_answer && (
+                  <div style={{
+                    marginTop: 10,
+                    padding: '10px 12px',
+                    background: '#f6ffed',
+                    borderRadius: 8,
+                    border: '1px solid #b7eb8f',
+                    fontSize: 13,
+                    color: '#237804'
+                  }}>
+                    当前答案: {point.user_answer}
+                  </div>
+                )}
+
+                {point.options?.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>参考选项</div>
+                    {point.options.map((opt, j) => {
+                      const isSelected = point.user_answer === opt
+
+                      return (
+                        <div
+                          key={j}
+                          style={{
+                            padding: '6px 10px',
+                            background: isSelected ? '#e6f4ff' : 'white',
+                            borderRadius: 6,
+                            marginBottom: 6,
+                            fontSize: 13,
+                            border: isSelected ? '1px solid #91caff' : '1px solid #d9d9d9'
+                          }}
+                        >
+                          {opt}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {point.recommendation && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#1677ff' }}>
+                    建议: {point.recommendation}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
