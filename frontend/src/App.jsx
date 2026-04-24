@@ -59,6 +59,16 @@ function App() {
     }
   }, [])
 
+  // 监听澄清弹窗关闭事件
+  useEffect(() => {
+    const handleCloseModal = () => {
+      setClarificationNeeded(false)
+      setError(null) // 清除错误状态
+    }
+    window.addEventListener('closeClarificationModal', handleCloseModal)
+    return () => window.removeEventListener('closeClarificationModal', handleCloseModal)
+  }, [])
+
   const checkBackend = async () => {
     try {
       const data = await healthCheck()
@@ -121,6 +131,10 @@ function App() {
       output: null
     })
     setClarificationNeeded(false)
+
+    // 保存原始输入到 window，确保历史记录可以保存
+    window.lastAnalysisContent = content
+    window.lastAnalysisContext = projectContext
 
     const cancel = analyzeRequirementStream(content, projectContext, {
       onProgress: (data) => {
@@ -255,12 +269,32 @@ function App() {
         setHistoryList(getHistory())
       }
     } catch (err) {
-      console.error('继续分析失败:', err)
+      // 尝试解析后端返回的错误信息
+      let errorTitle = '继续分析失败'
+      let errorMsg = err.message || '无法完成澄清后的分析'
+      let suggestion = '请重试或跳过澄清'
+
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        if (typeof detail === 'object') {
+          errorMsg = detail.message || errorMsg
+          suggestion = detail.suggestion || suggestion
+          if (detail.type === 'context_not_found') {
+            errorTitle = '分析会话已过期'
+            suggestion = '请重新输入需求进行分析'
+          }
+        } else {
+          errorMsg = String(detail)
+        }
+      }
+
       setError({
-        title: '继续分析失败',
-        message: err.message || '无法完成澄清后的分析',
-        suggestion: '请重试或跳过澄清'
+        title: errorTitle,
+        message: errorMsg,
+        suggestion
       })
+      // 关闭弹窗，错误会显示在主页面
+      setClarificationNeeded(false)
     } finally {
       setSubmittingClarification(false)
     }
@@ -301,11 +335,31 @@ function App() {
       }
     } catch (err) {
       console.error('跳过澄清后继续分析失败:', err)
+      // 尝试解析后端返回的错误信息
+      let errorTitle = '继续分析失败'
+      let errorMsg = err.message || '无法跳过澄清后继续分析'
+      let suggestion = '请重试'
+
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        if (typeof detail === 'object') {
+          errorMsg = detail.message || errorMsg
+          suggestion = detail.suggestion || suggestion
+          if (detail.type === 'context_not_found') {
+            errorTitle = '分析会话已过期'
+            suggestion = '请重新输入需求进行分析'
+          }
+        } else {
+          errorMsg = String(detail)
+        }
+      }
+
       setError({
-        title: '继续分析失败',
-        message: err.message || '无法跳过澄清后继续分析',
-        suggestion: '请重试'
+        title: errorTitle,
+        message: errorMsg,
+        suggestion
       })
+      setClarificationNeeded(false)
     } finally {
       setSubmittingClarification(false)
     }
@@ -742,6 +796,7 @@ function App() {
           onClose={() => setHistoryOpen(false)}
           history={historyList}
           onLoadHistory={handleLoadHistory}
+          onRefreshHistory={() => setHistoryList(getHistory())}
         />
 
         {/* P4: 澄清问题模态框 */}
@@ -751,6 +806,7 @@ function App() {
             onSubmit={handleClarificationSubmit}
             onSkip={handleClarificationSkip}
             isLoading={submittingClarification}
+            error={error}
           />
         )}
 

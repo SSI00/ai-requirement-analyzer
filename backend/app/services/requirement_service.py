@@ -6,6 +6,8 @@
 import uuid
 import time
 import json
+import os
+import tempfile
 from typing import Dict, Any, Optional, List, AsyncGenerator
 from app.services.understanding_service import understanding_service
 from app.services.analysis_service import analysis_service
@@ -19,10 +21,13 @@ logger = logging.getLogger(__name__)
 class RequirementService:
     """需求分析主服务"""
 
-    # 存储进行中的分析上下文（用于澄清后继续）
-    _active_contexts: Dict[str, Dict[str, Any]] = {}
+    # 上下文文件存储目录
+    _context_dir = os.path.join(tempfile.gettempdir(), "ai_requirement_contexts")
 
     def __init__(self):
+        # 确保上下文目录存在
+        os.makedirs(self._context_dir, exist_ok=True)
+
         self.steps_template = [
             {"step": "intent_recognition", "name": "意图识别", "status": "pending"},
             {"step": "entity_extraction", "name": "实体抽取", "status": "pending"},
@@ -44,6 +49,55 @@ class RequirementService:
     def _make_progress_event(self, event_type: str, data: dict) -> str:
         """构造SSE事件字符串"""
         return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    def _save_context(self, requirement_id: str, context: Dict[str, Any]) -> None:
+        """保存上下文到文件"""
+        context_path = os.path.join(self._context_dir, f"{requirement_id}.json")
+        try:
+            # 确保目录存在
+            os.makedirs(self._context_dir, exist_ok=True)
+            with open(context_path, 'w', encoding='utf-8') as f:
+                json.dump(context, f, ensure_ascii=False, default=str)
+            logger.info(f"上下文已保存: {requirement_id} -> {context_path}")
+            # 验证文件确实存在
+            if os.path.exists(context_path):
+                logger.info(f"上下文文件验证成功，大小: {os.path.getsize(context_path)} bytes")
+            else:
+                logger.error(f"上下文文件保存后不存在: {context_path}")
+        except Exception as e:
+            logger.error(f"保存上下文失败: {e}")
+
+    def _load_context(self, requirement_id: str) -> Optional[Dict[str, Any]]:
+        """从文件加载上下文"""
+        context_path = os.path.join(self._context_dir, f"{requirement_id}.json")
+        logger.info(f"尝试加载上下文: {requirement_id} from {context_path}")
+        try:
+            if os.path.exists(context_path):
+                with open(context_path, 'r', encoding='utf-8') as f:
+                    context = json.load(f)
+                logger.info(f"上下文已加载: {requirement_id}")
+                return context
+            else:
+                logger.warning(f"上下文文件不存在: {context_path}")
+                # 列出目录中的所有文件帮助调试
+                if os.path.exists(self._context_dir):
+                    files = os.listdir(self._context_dir)
+                    logger.info(f"上下文目录中的文件: {files}")
+                else:
+                    logger.warning(f"上下文目录不存在: {self._context_dir}")
+        except Exception as e:
+            logger.error(f"加载上下文失败: {e}")
+        return None
+
+    def _delete_context(self, requirement_id: str) -> None:
+        """删除上下文文件"""
+        context_path = os.path.join(self._context_dir, f"{requirement_id}.json")
+        try:
+            if os.path.exists(context_path):
+                os.remove(context_path)
+                logger.debug(f"上下文已删除: {requirement_id}")
+        except Exception as e:
+            logger.error(f"删除上下文失败: {e}")
 
     def _has_critical_fuzzy_points(self, understanding: Dict[str, Any]) -> bool:
         """检查是否有需要澄清的模糊点"""
@@ -136,8 +190,9 @@ class RequirementService:
                 logger.info(f"[{requirement_id}] 检测到需要澄清的模糊点，暂停等待用户回答")
                 self._update_step(steps, "implied_mining", "pending", "等待澄清...")
 
-                # 保存上下文供后续继续
-                self._active_contexts[requirement_id] = {
+                logger.info(f"[{requirement_id}] 开始保存上下文到文件...")
+                # 保存上下文到文件供后续继续
+                context_data = {
                     "content": content,
                     "project_context": project_context,
                     "conversation_history": conversation_history,
@@ -145,13 +200,18 @@ class RequirementService:
                     "steps": steps,
                     "start_time": start_time
                 }
+                logger.info(f"[{requirement_id}] 上下文数据准备完毕，understanding 字段数量: {len(understanding)}")
+                self._save_context(requirement_id, context_data)
+                logger.info(f"[{requirement_id}] 上下文保存调用完成")
 
                 # 发送澄清请求事件
+                logger.info(f"[{requirement_id}] 发送 clarification_needed 事件")
                 yield self._make_progress_event("clarification_needed", {
                     "requirement_id": requirement_id,
                     "fuzzy_points": understanding.get("fuzzy_points", []),
                     "message": "检测到需求描述不清晰，需要澄清以下问题"
                 })
+                logger.info(f"[{requirement_id}] clarification_needed 事件已发送，准备返回")
                 return  # 暂停，等待前端调用 continue 接口
 
             # 继续 Step 2: 需求分析 (Layer 3)
@@ -264,8 +324,8 @@ class RequirementService:
 
         从保存的上下文恢复，继续完成剩余的分析步骤
         """
-        # 获取保存的上下文
-        ctx = self._active_contexts.get(requirement_id)
+        # 获取保存的上下文（从文件加载）
+        ctx = self._load_context(requirement_id)
         if not ctx:
             raise RequirementServiceError(
                 f"找不到需求ID {requirement_id} 的分析上下文",
@@ -285,8 +345,8 @@ class RequirementService:
                 understanding, clarification
             )
 
-        # 清理上下文
-        del self._active_contexts[requirement_id]
+        # 清理上下文文件
+        self._delete_context(requirement_id)
 
         analysis = None
         output = None

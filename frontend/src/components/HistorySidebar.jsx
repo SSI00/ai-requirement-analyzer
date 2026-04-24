@@ -2,17 +2,25 @@ import React from 'react'
 import { History, Trash2, X, Clock } from 'lucide-react'
 import { deleteHistoryItem, clearHistory } from '../services/storage'
 
-function HistorySidebar({ isOpen, onClose, history, onLoadHistory }) {
+function HistorySidebar({ isOpen, onClose, history, onLoadHistory, onRefreshHistory }) {
   const handleDelete = (e, id) => {
     e.stopPropagation()
     deleteHistoryItem(id)
-    onLoadHistory()
+    if (onRefreshHistory) {
+      onRefreshHistory()
+    } else {
+      onLoadHistory()
+    }
   }
 
   const handleClear = () => {
     if (window.confirm('确定清空所有历史记录？')) {
       clearHistory()
-      onLoadHistory()
+      if (onRefreshHistory) {
+        onRefreshHistory()
+      } else {
+        onLoadHistory()
+      }
     }
   }
 

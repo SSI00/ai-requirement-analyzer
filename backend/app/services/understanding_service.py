@@ -100,7 +100,7 @@ class UnderstandingService:
 
         Args:
             understanding: 原始理解结果
-            clarification: 澄清回答列表 [{"question": "...", "answer": "..."}]
+            clarification: 澄清回答列表 [{"question": "...", "answer": "..."}] 或 ClarificationAnswer 模型列表
 
         Returns:
             更新后的理解结果
@@ -114,6 +114,17 @@ class UnderstandingService:
             "fuzzy_points": []
         }
 
+        # 辅助函数：从clarification项中获取question和answer（兼容dict和Pydantic模型）
+        def get_question(item):
+            if isinstance(item, dict):
+                return item.get("question", "")
+            return getattr(item, "question", "")
+
+        def get_answer(item):
+            if isinstance(item, dict):
+                return item.get("answer", "")
+            return getattr(item, "answer", "")
+
         # 用澄清回答更新模糊点
         for point in understanding.get("fuzzy_points", []):
             fuzzy_point_text = point.get("fuzzy_point", "")
@@ -121,8 +132,9 @@ class UnderstandingService:
             # 找到对应的回答
             answer_text = None
             for ca in clarification:
-                if ca.get("question") == fuzzy_point_text or fuzzy_point_text in ca.get("question", ""):
-                    answer_text = ca.get("answer", "")
+                q = get_question(ca)
+                if q == fuzzy_point_text or fuzzy_point_text in q:
+                    answer_text = get_answer(ca)
                     break
 
             # 如果有回答，更新模糊点状态
@@ -137,7 +149,7 @@ class UnderstandingService:
         # 添加澄清上下文到隐含需求
         if clarification:
             clarification_context = "；".join([
-                f"已澄清：{ca.get('question')} -> {ca.get('answer')}"
+                f"已澄清：{get_question(ca)} -> {get_answer(ca)}"
                 for ca in clarification
             ])
             # 在意图描述中追加澄清信息

@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
-import { HelpCircle, SkipForward, Send, AlertCircle } from 'lucide-react'
+import { HelpCircle, SkipForward, Send, AlertCircle, X } from 'lucide-react'
 
-function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
+function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading, error }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState({})
-  const [customInput, setCustomInput] = useState('')
 
   if (!fuzzyPoints || fuzzyPoints.length === 0) return null
 
@@ -18,42 +17,20 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
     }))
   }
 
-  const handleCustomInput = () => {
-    if (customInput.trim()) {
-      setAnswers(prev => ({
-        ...prev,
-        [currentPoint.fuzzy_point]: customInput.trim()
-      }))
-      setCustomInput('')
-    }
-  }
-
-  const handleNext = () => {
-    if (currentIndex < totalPoints - 1) {
-      setCurrentIndex(currentIndex + 1)
-    }
-  }
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
-    }
-  }
-
   const handleSubmit = () => {
-    // 整理所有回答
-    const clarificationData = {
-      answers: Object.entries(answers).map(([question, answer]) => ({
-        question,
-        answer
-      })),
-      skipped: false
-    }
-    onSubmit(clarificationData)
+    const answersList = Object.entries(answers).map(([question, answer]) => ({
+      question,
+      answer
+    }))
+    onSubmit({ answers: answersList, skipped: false })
   }
 
   const handleSkipAll = () => {
     onSkip()
+  }
+
+  const handleClose = () => {
+    window.dispatchEvent(new CustomEvent('closeClarificationModal'))
   }
 
   const currentAnswer = answers[currentPoint?.fuzzy_point]
@@ -99,7 +76,7 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
           }}>
             <HelpCircle size={20} color="#fa8c16" />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: 16, color: '#333' }}>
               需要澄清的问题
             </div>
@@ -107,6 +84,18 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
               请回答以下 {totalPoints} 个问题以帮助我们更准确地分析需求
             </div>
           </div>
+          <button
+            onClick={handleClose}
+            style={{
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              padding: 4
+            }}
+            title="关闭"
+          >
+            <X size={20} color="#666" />
+          </button>
         </div>
 
         {/* Progress */}
@@ -133,6 +122,35 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
 
         {/* Content */}
         <div style={{ padding: '24px' }}>
+          {/* Error message */}
+          {error && (
+            <div style={{
+              padding: '12px 16px',
+              background: '#fff2f0',
+              border: '1px solid #ffccc7',
+              borderRadius: 8,
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8
+            }}>
+              <AlertCircle size={16} color="#ff4d4f" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500, color: '#cf1322', marginBottom: 4 }}>
+                  {error.title || '提交失败'}
+                </div>
+                <div style={{ fontSize: 13, color: '#666' }}>
+                  {error.message}
+                </div>
+                {error.suggestion && (
+                  <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                    建议: {error.suggestion}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Question */}
           <div style={{
             padding: '16px',
@@ -157,7 +175,7 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
 
           {/* Options */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>请选择或输入:</div>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>请选择:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {currentPoint.options?.map((option, i) => {
                 const isSelected = currentAnswer === option
@@ -181,40 +199,6 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
             </div>
           </div>
 
-          {/* Custom input option */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>或者自定义回答:</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                placeholder="输入您的回答..."
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #d9d9d9',
-                  fontSize: 14,
-                  outline: 'none'
-                }}
-              />
-              <button
-                onClick={handleCustomInput}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 6,
-                  background: '#f5f5f5',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-              >
-                确认
-              </button>
-            </div>
-          </div>
-
           {/* Current answer display */}
           {currentAnswer && (
             <div style={{
@@ -233,7 +217,7 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
           {/* Navigation buttons */}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button
-              onClick={handlePrev}
+              onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
               disabled={currentIndex === 0}
               style={{
                 padding: '10px 20px',
@@ -248,7 +232,7 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
             </button>
             {currentIndex < totalPoints - 1 ? (
               <button
-                onClick={handleNext}
+                onClick={() => setCurrentIndex(currentIndex + 1)}
                 style={{
                   padding: '10px 20px',
                   borderRadius: 6,
@@ -312,7 +296,7 @@ function ClarificationModal({ fuzzyPoints, onSubmit, onSkip, isLoading }) {
             }}
           >
             <SkipForward size={14} />
-            跳过全部，使用默认值继续
+            跳过全部
           </button>
         </div>
       </div>

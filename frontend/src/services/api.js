@@ -37,6 +37,7 @@ export async function analyzeRequirement(content, projectContext = '') {
  * @param {string} projectContext - 项目上下文（可选）
  * @param {Object} callbacks - 事件回调
  * @param {Function} callbacks.onProgress - 进度更新回调 (data) => void
+ * @param {Function} callbacks.onClarificationNeeded - 需要澄清回调 (data) => void
  * @param {Function} callbacks.onUnderstanding - 需求理解结果回调 (data) => void
  * @param {Function} callbacks.onAnalysis - 需求分析结果回调 (data) => void
  * @param {Function} callbacks.onOutput - 输出生成结果回调 (data) => void
@@ -47,6 +48,7 @@ export async function analyzeRequirement(content, projectContext = '') {
 export function analyzeRequirementStream(content, projectContext = '', callbacks = {}) {
   const {
     onProgress,
+    onClarificationNeeded,
     onUnderstanding,
     onAnalysis,
     onOutput,
@@ -122,6 +124,9 @@ export function analyzeRequirementStream(content, projectContext = '', callbacks
             switch (eventType) {
               case 'progress':
                 onProgress?.(data)
+                break
+              case 'clarification_needed':
+                onClarificationNeeded?.(data)
                 break
               case 'understanding':
                 onUnderstanding?.(data)

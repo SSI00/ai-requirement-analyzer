@@ -150,12 +150,34 @@ class LLMService:
         # 尝试提取JSON对象
         match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
-            return match.group(0)
+            fixed = match.group(0)
+            # 尝试修复常见的逗号问题
+            fixed = self._fix_common_json_issues(fixed)
+            return fixed
         # 尝试提取JSON数组
         match = re.search(r'\[.*\]', content, re.DOTALL)
         if match:
-            return match.group(0)
+            fixed = match.group(0)
+            fixed = self._fix_common_json_issues(fixed)
+            return fixed
         return content
+
+    def _fix_common_json_issues(self, json_str: str) -> str:
+        """修复常见的JSON格式问题"""
+        # 1. 修复多余逗号 (如 {"a": 1, } -> {"a": 1})
+        json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
+        # 2. 修复单引号为双引号（但在字符串内部不处理）
+        # 先找出所有字符串内容，然后只处理字符串外的内容
+        # 简化处理：如果有单引号问题很可能导致JSON失败
+        # 3. 移除尾随逗号
+        json_str = re.sub(r',(\s*)$', r'\1', json_str, flags=re.MULTILINE)
+        # 4. 修复未转义的换行符在字符串内的问题
+        # 移除多余的空白字符但保留必要的空格
+        json_str = re.sub(r'\\s+', ' ', json_str)
+        # 5. 尝试修复换行符问题 - 替换为\n（如果在外面）
+        # 6. 移除控制字符
+        json_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', json_str)
+        return json_str
 
 
 class LLMServiceError(Exception):

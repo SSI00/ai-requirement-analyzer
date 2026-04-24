@@ -28,7 +28,17 @@ app = FastAPI(
 **当前模型**: {settings.OPENAI_MODEL}
 """,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": 1,
+        "docExpansion": "list",
+        "filter": True,
+        "showExtensions": True,
+        "showCommonExtensions": True,
+        "tryItOutEnabled": True,
+        "deepLinking": True,
+        "persistAuthorization": True,
+    }
 )
 
 # 配置CORS
@@ -46,14 +56,22 @@ app.include_router(requirement.router)
 
 @app.get("/")
 async def root():
-    """根路径"""
+    """根路径 - 返回中文提示页面"""
     return {
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "llm_provider": settings.llm_provider,
         "llm_model": settings.OPENAI_MODEL,
         "docs": "/docs",
-        "status": "running"
+        "docs_zh": "/docs/zh-CN",
+        "status": "running",
+        "message": "AI需求分析系统 API 运行中",
+        "api_guide": {
+            "前端界面": "http://localhost:5173",
+            "API文档": "http://localhost:8000/docs",
+            "API文档(中文)": "http://localhost:8000/docs?language=zh-CN",
+            "语言切换": "在 /docs 页面右上角点击 'Language' 下拉框选择中文"
+        }
     }
 
 

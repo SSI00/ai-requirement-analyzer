@@ -9,6 +9,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        rewrite: (path) => path,  // 保留完整路径
         // SSE流式响应需要禁用缓冲
         configure: (proxy, options) => {
           proxy.on('proxyReq', (proxyReq, req, res) => {
