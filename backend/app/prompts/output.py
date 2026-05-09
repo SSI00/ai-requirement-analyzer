@@ -24,6 +24,7 @@ OUTPUT_SYSTEM_PROMPT = """你是一位专业产品经理，擅长撰写清晰、
 OUTPUT_USER_PROMPT = """
 ## 任务
 基于分析后的需求，生成结构化输出。
+你需要特别做“精选”：不要机械罗列，需筛选出最能体现用户真实意图且可落地的需求，形成最终项目需求文档。
 
 ## 输入
 需求理解结果: {understanding_result}
@@ -74,7 +75,22 @@ OUTPUT_USER_PROMPT = """
       "impact": "影响(高/中/低)",
       "mitigation": "应对策略"
     }}
-  ]
+  ],
+  "final_requirement_doc": {{
+    "executive_summary": "一句话说明用户真正意图与目标",
+    "user_intent_statement": "清晰、可验证、无歧义的意图陈述",
+    "selected_requirements": ["只保留必须进入本期的关键需求"],
+    "out_of_scope": ["明确不做或延期事项"],
+    "milestones": [
+      {{
+        "phase": "阶段名称",
+        "goal": "阶段目标",
+        "deliverables": ["交付物A", "交付物B"]
+      }}
+    ],
+    "acceptance_gate": ["上线前必须通过的验收门槛"],
+    "open_questions": ["仍需业务方确认的问题"]
+  }}
 }}
 ```
 
@@ -91,6 +107,13 @@ OUTPUT_USER_PROMPT = """
 正常场景：核心功能路径
 边界场景：极限值、空值、超长输入等
 异常场景：网络中断、权限不足、数据异常等
+
+## 最终文档精选原则
+- 必须先判断“用户真正意图”，再反推需求列表
+- selected_requirements 仅保留高价值、强相关、可执行项
+- out_of_scope 要明确边界，避免范围蔓延
+- milestones 必须体现分阶段交付逻辑
+- acceptance_gate 必须可检查、可度量
 
 请确保输出是严格合法的JSON，不要包含任何markdown代码块标记之外的文本。
 """
