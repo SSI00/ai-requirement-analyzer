@@ -62,7 +62,8 @@ class OutputService:
             "acceptance_criteria": result.get("acceptance_criteria", []),
             "clarification_questions": result.get("clarification_questions", []),
             "technical_suggestions": result.get("technical_suggestions", []),
-            "risk_list": result.get("risk_list", [])
+            "risk_list": result.get("risk_list", []),
+            "final_requirement_doc": result.get("final_requirement_doc", {})
         }
         
         # 标准化用户故事
@@ -83,6 +84,20 @@ class OutputService:
             ts.setdefault("risk_level", "中")
             ts.setdefault("mitigation", "待评估")
         
+        # 标准化最终需求文档
+        final_doc = standardized["final_requirement_doc"]
+        if not isinstance(final_doc, dict):
+            final_doc = {}
+            standardized["final_requirement_doc"] = final_doc
+
+        final_doc.setdefault("executive_summary", "")
+        final_doc.setdefault("user_intent_statement", "")
+        final_doc.setdefault("selected_requirements", [])
+        final_doc.setdefault("out_of_scope", [])
+        final_doc.setdefault("milestones", [])
+        final_doc.setdefault("acceptance_gate", [])
+        final_doc.setdefault("open_questions", [])
+
         # 标准化风险
         for risk in standardized["risk_list"]:
             risk.setdefault("probability", "中")

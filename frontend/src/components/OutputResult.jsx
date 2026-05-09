@@ -1,5 +1,5 @@
 import React from 'react'
-import { BookOpen, CheckSquare, HelpCircle, Lightbulb, ShieldAlert } from 'lucide-react'
+import { BookOpen, CheckSquare, HelpCircle, Lightbulb, ShieldAlert, FileCheck2 } from 'lucide-react'
 
 function OutputResult({ data }) {
   if (!data) return null
@@ -9,7 +9,8 @@ function OutputResult({ data }) {
     acceptance_criteria,
     clarification_questions,
     technical_suggestions,
-    risk_list
+    risk_list,
+    final_requirement_doc
   } = data
 
   const getPriorityColor = (priority) => {
@@ -139,6 +140,25 @@ function OutputResult({ data }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+
+
+      {final_requirement_doc && (
+        <div className="section">
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FileCheck2 size={16} />
+            最终精选需求文档
+          </div>
+          <div className="list-item" style={{ background: '#f6ffed', border: '1px solid #b7eb8f' }}>
+            <div className="list-item-title">{final_requirement_doc.executive_summary || '待补充摘要'}</div>
+            {final_requirement_doc.user_intent_statement && <div className="typography-body-sm" style={{ marginTop: 6 }}>真实意图：{final_requirement_doc.user_intent_statement}</div>}
+            <div className="typography-caption" style={{ marginTop: 10, color: '#666' }}>精选需求</div>
+            {(final_requirement_doc.selected_requirements || []).map((item, i) => <div key={i} className="typography-body-sm">• {item}</div>)}
+            <div className="typography-caption" style={{ marginTop: 10, color: '#666' }}>范围外</div>
+            {(final_requirement_doc.out_of_scope || []).map((item, i) => <div key={i} className="typography-body-sm">• {item}</div>)}
+          </div>
         </div>
       )}
 

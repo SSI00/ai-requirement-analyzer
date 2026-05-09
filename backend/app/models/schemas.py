@@ -173,6 +173,17 @@ class AnalysisResult(BaseModel):
     priorities: List[dict] = Field(description="优先级排序")
 
 
+class FinalRequirementDoc(BaseModel):
+    """最终精选需求文档"""
+    executive_summary: str = Field(default="", description="一句话目标摘要")
+    user_intent_statement: str = Field(default="", description="用户真实意图陈述")
+    selected_requirements: List[str] = Field(default_factory=list, description="精选后的关键需求")
+    out_of_scope: List[str] = Field(default_factory=list, description="明确不纳入范围的事项")
+    milestones: List[dict] = Field(default_factory=list, description="分阶段里程碑")
+    acceptance_gate: List[str] = Field(default_factory=list, description="验收门槛")
+    open_questions: List[str] = Field(default_factory=list, description="待确认问题")
+
+
 class OutputResult(BaseModel):
     """输出生成结果"""
     user_stories: List[UserStory] = Field(description="用户故事列表")
@@ -180,6 +191,7 @@ class OutputResult(BaseModel):
     clarification_questions: List[ClarificationQuestion] = Field(description="澄清问题列表")
     technical_suggestions: Optional[List[dict]] = Field(default=None, description="技术建议")
     risk_list: Optional[List[dict]] = Field(default=None, description="风险清单")
+    final_requirement_doc: Optional[FinalRequirementDoc] = Field(default=None, description="最终精选需求文档")
 
 
 class RequirementResponse(BaseModel):
